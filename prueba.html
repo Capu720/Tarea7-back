@@ -1,0 +1,421 @@
+
+﻿<!DOCTYPE html>
+<html>
+	<head>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" charset="utf-8">
+		<meta name="author" content="Carlos Jesus Morales Hernandez">
+ 		<script src='/WSClient.js'></script>
+		<script>
+			var URL = "/Servicio/rest/ws";
+
+			var foto = null;  // por default la foto es nula
+			function get(id)
+			{
+				return document.getElementById(id);
+			}
+			function muestra(id)
+			{
+				get(id).style.display = "block";
+			}
+
+			function oculta(id)
+			{
+				get(id).style.display = "none";
+			}
+
+			function muestra_busqueda(id)
+			{
+			     oculta("ver_carrito");
+			     oculta("resultado_articulos");
+			     muestra("encabezado_consulta");
+			     muestra("etiqueta_des");
+			     muestra("consulta_descripcion");
+			     muestra("boton_consulta");
+			     oculta("encabezado_modifica");
+			     muestra(id);
+			}
+
+
+			function muestra_pantalla(id)
+			{
+				oculta("menu");
+				muestra(id);
+			}
+			function oculta_pantalla(id)
+			{
+				oculta(id);
+				muestra("menu");
+			}
+			function readSingleFile(files,imagen)
+			{
+				var file = files[0];
+				if (!file) return;
+				var reader = new FileReader();
+				reader.onload = function(e)
+				{
+					imagen.src = reader.result;
+					// reader.result incluye al principio: "data:image/jpeg;base64,"
+					foto = reader.result.split(',')[1];
+				};
+				reader.readAsDataURL(file);
+			}
+			function limpia_alta()
+			{
+				get("alta_nombre").value = "";
+				get("alta_descripcion").value = "";
+				get("alta_precio").value = "";
+				get("alta_cantidad").value = "";
+				get("alta_imagen").src = "/usuario_sin_foto.png";
+				foto = null;
+			}
+			function comprar()
+			{
+				var cliente = new WSClient(URL);
+				var articulo =
+				{
+					id_articulo: get("consulta_idArticulo").value,
+					cantidad: get("cantidad_compra").value,
+					resta: get("consulta_cantidad").value - get("cantidad_compra").value
+				};
+				cliente.postJson("alta_carrito",
+				{
+					articulo: articulo
+				},
+				function(code,result)
+				{
+					if(articulo.resta < 0)
+						alert("No hay suficientes productos. Intente otra cantidad");
+					else if (code == 200)
+						alert("Articulos agregados al carrito. Disponible en el inventario: " + articulo.resta);
+					else
+						alert(JSON.stringify(result));
+					    
+				});
+			}
+
+			function alta()
+			{
+				var cliente = new WSClient(URL);
+				var articulo =
+				{
+					nombre: get("alta_nombre").value,
+					descripcion: get("alta_descripcion").value,
+					precio: get("alta_precio").value,
+					cantidad: get("alta_cantidad").value,
+					foto: foto
+				};
+				cliente.postJson("alta_articulo",
+				{
+					articulo: articulo
+				},
+				function(code,result)
+				{
+					if (code == 200)
+						alert("OK");
+					else
+						alert(JSON.stringify(result));
+				});
+			}
+			function limpia_consulta()
+			{
+				get("consulta_nombre").value = "";
+				get("consulta_descripcion").value = "";
+				get("consulta_precio").value = "";
+				get("consulta_cantidad").value = "";
+				get("consulta_imagen").src = "/usuario_sin_foto.png";
+			}
+			function cierra_pantalla_consulta()
+			{
+				oculta_pantalla('consulta_usuario');
+				muestra("encabezado_consulta");
+				muestra("boton_consulta");
+				oculta("encabezado_modifica");
+				oculta("modifica_usuario");
+				get("consulta_email").readOnly = false;
+			}
+			function quita_foto()
+			{
+				foto=null;
+				get('consulta_imagen').src='usuario_sin_foto.png';
+				get('consulta_file').value='';
+			}
+			function consulta()
+			{
+				var cliente = new WSClient(URL);
+				cliente.postJson("compra_articulo",
+				{
+					// se debe pasar como parametro el email del usuario a consultar
+					// si el usuario no existe regresa un error
+					nombre: get("consulta_nombre").value,
+					descripcion: get("consulta_descripcion").value
+				},
+				function(code,result)
+				{
+					if (code == 200)
+					{
+						limpia_consulta();
+						let container = document.querySelector('#compra_articulo');
+						console.log(result);
+							result.forEach(articulo => {
+						        get("consulta_idArticulo").value = articulo.id_articulo; 
+							get("consulta_nombre").value = articulo.nombre;
+							get("consulta_descripcion").value = articulo.descripcion;
+							get("consulta_cantidad").value = articulo.cantidad;
+							get("consulta_precio").value = articulo.precio;
+							foto = articulo.foto;
+                                                	get("consulta_imagen").src = foto != null ? "data:image/jpeg;base64," + foto : "/usuario_sin_foto.png";
+								
+							oculta("encabezado_consulta");
+							muestra("encabezado_modifica");
+							muestra("resultado_articulos");
+							muestra("alta_carrito");
+							oculta("consulta_descripcion");
+							oculta("consulta_cantidad");
+							oculta("etiqueta_des");
+							oculta("boton_consulta");
+							get("consulta_nombre").readOnly = true;
+						});
+					}
+					else
+						// el objeto "result" es de tipo Error
+						alert(JSON.stringify(result));
+				});
+			}
+
+			function borrar_carro_completo()
+			{
+				var respuesta = window.confirm("¿Seguro que deseas borrar tu carrito?");
+				if(respuesta)
+				{
+					var cliente = new WSClient(URL);
+					cliente.postJson("eliminar_car_completo",
+					function(code, result)
+					{
+					    if(code == 200){
+						alert("Carrito eliminado");
+					    }
+					    else
+						alert(JSON.stringify(result));	
+					});
+				}
+
+			}
+
+			function mostrar_carrito()
+			{
+				 var cliente = new WSClient(URL);
+
+      				cliente.postJson("ver_carrito", {
+					nombre: get("consulta_nombre").value,
+				},
+				function(code, result) {
+        			if (code == 200) {
+					console.log(result);
+								
+					oculta("compra_articulo");
+          				muestra("ver_carrito");
+					var tbody = document.querySelector('#carritoTabla tbody');
+					var Total = document.querySelector('#Total');					
+					var cant_total = 0;
+          				for(var i = 0; i < result.length; i++){
+						var row = tbody.insertRow(i),
+						    foto_art = row.insertCell(0),
+						    nombre = row.insertCell(1),
+						    cantidad = row.insertCell(2),
+						    precio = row.insertCell(3),
+						    costo = row.insertCell(4),
+						    opcion = row.insertCell(5);
+					foto = result[i].foto;
+					
+					var boton = document.createElement('button');
+					boton.type = 'button';
+					boton.innerText = 'Eliminar artículo';
+					boton.onclick = function(){
+						var respuesta = window.confirm("¿Seguro que deseas eliminar el articulo?");
+						if(respuesta)
+						{
+							var cliente = new WSClient(URL);
+							var articulo = {
+								
+								id_articulo : result[i-1].id_articulo,
+								cantidad : result[i-1].cantidad
+							};
+							
+							cliente.postJson("eliminar_articulo",
+							{
+								articulo: articulo
+							},
+							function(code, result)
+							{
+								if(code == 200)
+									alert("Articulo eliminado");
+								else
+									alert(JSON.stringify(result));
+							});	
+						}
+					};					
+
+					var ruta = "<img width='100px' src='data:image/jpeg;base64," + foto + "'>";
+					cant_total = cant_total + result[i].resta;
+					nombre.innerHTML = result[i].nombre;
+					cantidad.innerHTML = result[i].cantidad;
+					precio.innerHTML = result[i].precio;
+					costo.innerHTML = result[i].resta;
+				
+					opcion.appendChild(boton);
+					foto_art.innerHTML = ruta;
+					tbody.appendChild(row);
+					}
+					Total.innerHTML = "TOTAL: $" + cant_total;
+       	 			}
+       				else
+          				alert(JSON.stringify(result));
+      				});
+			}
+
+			function mostrar_des()			
+			{
+				var valor = document.getElementById("consulta_descripcion").value;
+				alert("Descripción del articulo: " + valor);
+			}
+
+			function modifica()
+			{
+				var cliente = new WSClient(URL);
+				var usuario =
+				{
+					email: get("consulta_email").value,
+					nombre: get("consulta_nombre").value,
+					apellido_paterno: get("consulta_apellido_paterno").value,
+					apellido_materno: get("consulta_apellido_materno").value != "" ? get("consulta_apellido_materno").value : null,
+					fecha_nacimiento: get("consulta_fecha_nacimiento").value != "" ? new Date(get("consulta_fecha_nacimiento").value).toISOString() : null,
+					telefono: get("consulta_telefono").value != "" ? get("consulta_telefono").value : null,
+					genero: get("consulta_genero").value == "Masculino" ? "M" : get("consulta_genero").value == "Femenino" ? "F" : null,
+					foto: foto
+				};
+				cliente.postJson("modifica_usuario",
+				{
+					usuario: usuario
+				},
+				function(code,result)
+				{
+					if (code == 200)
+						alert("OK");
+					else
+						alert(JSON.stringify(result));
+				});
+			}
+			function limpia_borra()
+			{
+				get("borra_email").value = "";
+			}
+			function borra()
+			{
+				var client = new WSClient(URL);
+				client.postJson("borra_usuario",
+				{
+					email: get("borra_email").value
+				},
+				function(code,result)
+				{
+					if (code == 200)
+						alert("OK");
+					else
+						alert(JSON.stringify(result));
+				});
+			}
+		</script>
+	</head>
+	<body>
+	<div style="width:250px;margin:auto">
+		<div id="alta_articulo" style="display:none">
+			<h2 style="text-align:center">Captura de artículos</h2>
+			Nombre *<br>
+			<input type="text" id="alta_nombre" value="" style="width:250px"/><br>
+			Descripcion *<br>
+			<input type="text" id="alta_descripcion" value="" style="width:250px"/><br>
+			Precio<br>
+			<input type="text" id="alta_precio" value="" style="width:250px"/><br>
+			Cantidad *<br>
+			<input type="number" id="alta_cantidad" value="" style="width:250px"/><br>
+			Sube una imagen del producto
+			<img id="alta_imagen" width="100px" src="/usuario_sin_foto.png"></img><br>
+			<input type="file" onchange="readSingleFile(files,get('alta_imagen'))" multiple="false" accept="image/*"/><br>
+			<br>
+			<button type="button" onclick="alta()" style="width:250px;height:40px">Agregar artículo</button></br>
+			<button type="button" onclick="limpia_alta()" style="width:250px;height:40px">Limpiar pantalla</button></br>
+			<button type="button" onclick="muestra_pantalla('alta_usuario')" style="width:250px;height:40px">Regresar</button></br>
+		</div>
+
+		<div id="compra_articulo" style="display:none">
+			<div id="encabezado_consulta">
+				<h2 style="text-align:center">Compra de artículos</h2>
+			</div>
+			<div id="encabezado_modifica" style="display:none">
+				<h2 style="text-align:center">Compra de artículos</h2>
+			
+			</div>
+			Nombre *<br>
+                        <input type="text" id="consulta_nombre" value="" style="width:250px"/><br>
+                        <label for="consulta_descripcion" id ="etiqueta_des">Descripcion</label>
+                        <input type="text" id="consulta_descripcion" value="" style="width:250px"/><br>
+			<div id="resultado_articulos" style="display:none">
+				
+                                <input type="text" id="consulta_cantidad" value="" readonly style="width:250px"/><br>
+				Precio $
+				<input type="text" id="consulta_precio" value="" readonly style="width:100px"/><br>
+				<div id="alta_carrito" style="display:none">
+					Cantidad
+					<input type="number" id="cantidad_compra" value="" style="width:100px"/><br>
+					<input type="number" id="consulta_idArticulo" style="display:none"/>
+				</div>
+				<img id="consulta_imagen" width="100px" src="/usuario_sin_foto.png"></img>
+			
+				<br>
+				<button type="button" onclick="comprar()" style="width:250px;height:40px">Comprar</button></br>
+				<button type="button" onclick="mostrar_des()" style="width:100px;height:40px">Descripcion</button></br>
+				<button type="button" onclick="mostrar_carrito()" style="width:100px;height:40px">Carrito de compra</button></br>		
+		</div>
+			<div id="boton_consulta">
+				<br>
+				<button type="button" onclick="consulta()" style="width:250px;height:40px">Buscar articulos</button></br>
+			</div>
+			<button type="button" onclick="cierra_pantalla_consulta()" style="width:250px;height:40px">Regresar</button></br>
+		</div>
+		
+		<div id="ver_carrito" style="display:none">
+			<h2  style="text-align:center">Artículos en el carrito</h2>	
+			<table id="carritoTabla">
+				<thead>
+					<tr>
+						<th>Foto</th>
+						<th>Nombre</th>
+						<th>Cantidad</th>
+						<th>Precio</th>
+						<th>Costo</th>
+						<th>Opcion</th>
+					</tr>
+				</thead>
+			<tbody>
+			</tbody>
+			</table>
+			<div id="Total"></div>
+			<button type="button" onclick="borrar_carro_completo()" style="width:250px;height:40px">Borrar Carrito</button></br>
+			<button type="button" onclick="muestra_busqueda('compra_articulo')" style="width:250px;height:40px">Seguir comprando</button></br>
+		</div>
+
+		<div id="borra_usuario" style="display:none">
+			<h2 style="text-align:center">Borra usuario</h2>
+			Email *<br>
+			<input type="email" id="borra_email" value="" style="width:250px"/><br><br>
+			<button type="button" onclick="borra()" style="width:250px;height:40px">Borrar usuario</button></br>
+			<button type="button" onclick="oculta_pantalla('borra_usuario')" style="width:250px;height:40px">Regresar</button></br>
+		</div>
+
+		<div id="menu">
+			<button type="button" onclick="muestra_pantalla('alta_articulo')" style="width:250px;height:40px">Captura de artículo</button></br>
+			<button type="button" onclick="muestra_pantalla('compra_articulo')" style="width:250px;height:40px">Compra de artículos</button></br>
+		</div>
+	</div>
+	</body>
+</html>
